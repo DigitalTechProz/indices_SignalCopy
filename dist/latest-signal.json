@@ -1,0 +1,10 @@
+{
+  "symbol": "US30",
+  "orderType": "MARKET_BUY",
+  "volume": 0.01,
+  "price": null,
+  "stopLoss": 3561,
+  "takeProfit": 3789,
+  "id": "1720489469567",
+  "timestamp": "2024-07-09T01:44:29.567Z"
+}
