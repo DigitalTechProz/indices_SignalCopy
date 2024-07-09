@@ -1,18 +1,26 @@
-const pool = require('./db');
-require('dotenv').config();
-
-// Suggested code may be subject to a license. Learn more: ~LicenseLog:1529426007.
-const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs').promises;
-const session = require('express-session');
-const path = require('path');
-const { error } = require('console');
-const portfinder = require('portfinder');
+import express from 'express';
+import bodyParser from 'body-parser';
+import session from 'express-session';
+import path from 'path';
+import { promises as fs } from 'fs';
+import portfinder from 'portfinder';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import pool from './db.js';
 
 
+dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Extend the session type
+declare module 'express-session' {
+  interface SessionData {
+    authenticated?: boolean;
+  }
+}
 
 app.use(bodyParser.json());
 
@@ -25,15 +33,32 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Check authentication status
+const signalFilePath = path.join(__dirname, 'latest-signal.json');
+let latestSignal: any = null;
+
+async function loadLatestSignal() {
+    try {
+        const data = await fs.readFile(signalFilePath, 'utf8');
+        latestSignal = JSON.parse(data);
+        console.log('Latest signal loaded from file');
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            console.warn('Warning: latest-signal.json not found. Starting with no initial signal.');
+            latestSignal = null;
+        } else {
+            console.error('Error loading latest signal:', error);
+        }
+    }
+}
+
+await loadLatestSignal();
+
 app.get('/api/check-auth', (req, res) => {
   res.json({ authenticated: req.session.authenticated || false });
 });
 
-// Login endpoint
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  // In a real application, you would check these credentials against a database
   if (username === 'admin' && password === 'password') {
     req.session.authenticated = true;
     res.json({ success: true });
@@ -42,86 +67,72 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-// Logout endpoint
 app.post('/api/logout', (req, res) => {
   req.session.authenticated = false;
   res.json({ success: true });
 });
-
-
-let latestSignal = null;
-const signalFilePath = path.join(__dirname, 'latest-signal.json');
-
-async function loadLatestSignal() {
-    try {
-        const data = await fs.readFile(signalFilePath, 'utf8');
-        latestSignal = JSON.parse(data);
-        console.log('Latest signal loaded from file');
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            console.warn('Warning: latest-signal.json not found. Starting with no initial signal.');
-            latestSignal = null; // Or initialize with a default value
-        } else {
-            console.error('Error loading latest signal:', error); 
-        }
-    }
-}
-  
-
-loadLatestSignal();
-
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, '..', 'dist', 'public', 'index.html')); 
 });
 
+
+
 app.post('/api/signals', async (req, res) => {
-  const signal = req.body;
-  if (!req.session.authenticated) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  } else
-    if(!signal.symbol || !signal.orderType || !signal.volume) {
+    if (!req.session.authenticated) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const signal = req.body;
+    if (!signal.symbol || !signal.orderType || !signal.volume) {
         return res.status(400).json({ error: 'Invalid signal data' });
     }
     signal.id = Date.now().toString();
     signal.timestamp = new Date().toISOString();
-
     latestSignal = signal;
-
     try {
         await fs.writeFile(signalFilePath, JSON.stringify(signal, null, 2));
-        console.log('signal saved to file');
-    } catch (err) {
-        console.error('Error writing signal to file:', err);
+        console.log('Signal saved to file');
+        // Save signal to database
+        const query = 'INSERT INTO signals(id, symbol, order_type, volume, timestamp) VALUES($1, $2, $3, $4, $5)';
+        const values = [signal.id, signal.symbol, signal.orderType, signal.volume, signal.timestamp];
+        await pool.query(query, values);
+        console.log('Signal saved to database');
+        res.json({ message: 'Signal received', id: signal.id });
     }
-    res.json({ message: 'Signal received', id: signal.id });
-});
-
-app.get('/api/latest-signal', (req, res) => {
-    if (latestSignal) {
-        res.json(latestSignal);
-    } else {
-        res.status(404).json({ error: 'No signal found' });
+    catch (err) {
+        console.error('Error saving signal:', err);
+        res.status(500).json({ error: 'Error saving signal' });
     }
 });
 
-app.get('/', async (req, res) => {
-   try {
-    const result = await pool.query('SELECT NOW()');
-    res.send(`Database connected: ${result.rows[0].now}`);
-
-   }catch (err) {
-    console.error(err);
-    res.send('Internal Server Error: error connecting to database');
-   }
+app.get('/api/latest-signal', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM signals ORDER BY timestamp DESC LIMIT 1');
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        }
+        else {
+            res.status(404).json({ error: 'No signal found' });
+        }
+    }
+    catch (err) {
+        console.error('Error fetching latest signal:', err);
+        res.status(500).json({ error: 'Error fetching latest signal' });
+    }
 });
 
-
-portfinder.getPortPromise().then(port => {
-    app.listen(port, () => {
-        console.log(`Server listening on port ${port}`);
-    });
-
-}).catch(err => {
-    console.error('Error finding a port:', err);
+// Database connection test
+app.get('/api/db-test', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT NOW()');
+        res.send(`Database connected: ${result.rows[0].now}`);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).send('Internal Server Error: error connecting to database');
+    }
 });
 
+const port = await portfinder.getPortPromise();
+app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+});

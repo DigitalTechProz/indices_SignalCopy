@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Signal Sender</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        select, input[type="number"], input[type="submit"], input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        #loginForm, #signalForm {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trading Signal Sender</h1>
+        <div id="loginForm">
+            <h2>Login</h2>
+            <form id="login">
+                <label for="username">Username:</label>
+                <input type="text" id="username" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" required>
+                <input type="submit" value="Login">
+            </form>
+        </div>
+        <div id="signalForm" style="display:none;">
+            <form id="signal">
+                <label for="symbol">Symbol:</label>
+                <select id="symbol" required>
+                    <optgroup label="Forex">
+                        <option value="EURUSD">EUR/USD</option>
+                        <option value="GBPUSD">GBP/USD</option>
+                        <option value="USDJPY">USD/JPY</option>
+                        <option value="AUDUSD">AUD/USD</option>
+                    </optgroup>
+                    <optgroup label="Metals">
+                        <option value="XAUUSD">Gold (XAU/USD)</option>
+                        <option value="XAGUSD">Silver (XAG/USD)</option>
+                    </optgroup>
+                    <optgroup label="Indices">
+                        <option value="US30">Dow Jones (US30)</option>
+                        <option value="US500">S&P 500 (US500)</option>
+                        <option value="USTEC">NASDAQ (USTEC)</option>
+                    </optgroup>
+                </select>
+
+                <label for="orderType">Order Type:</label>
+                <select id="orderType" required>
+                    <option value="MARKET_BUY">Market Buy</option>
+                    <option value="MARKET_SELL">Market Sell</option>
+                    <option value="LIMIT_BUY">Limit Buy</option>
+                    <option value="LIMIT_SELL">Limit Sell</option>
+                    <option value="STOP_BUY">Stop Buy</option>
+                    <option value="STOP_SELL">Stop Sell</option>
+                </select>
+
+                <label for="volume">Volume (Lots):</label>
+                <input type="number" id="volume" step="0.01" min="0.01" value="0.01" required>
+
+                <label for="price">Price (for pending orders):</label>
+                <input type="number" id="price" step="0.00001">
+
+                <label for="stopLoss">Stop Loss:</label>
+                <input type="number" id="stopLoss" step="0.00001">
+
+                <label for="takeProfit">Take Profit:</label>
+                <input type="number" id="takeProfit" step="0.00001">
+
+                <input type="submit" value="Send Signal">
+            </form>
+            <button id="logout">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const signalForm = document.getElementById('signalForm');
+        
+        // Check if user is logged in
+        function checkAuth() {
+            fetch('/api/check-auth', {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.authenticated) {
+                    loginForm.style.display = 'none';
+                    signalForm.style.display = 'block';
+                } else {
+                    loginForm.style.display = 'block';
+                    signalForm.style.display = 'none';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Initial auth check
+        checkAuth();
+
+        // Login form submission
+        document.getElementById('login').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loginForm.style.display = 'none';
+                    signalForm.style.display = 'block';
+                } else {
+                    alert('Login failed. Please try again.');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        // Logout
+        document.getElementById('logout').addEventListener('click', function() {
+            fetch('/api/logout', {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loginForm.style.display = 'block';
+                    signalForm.style.display = 'none';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        // Signal form submission
+        document.getElementById('signal').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const signal = {
+                symbol: document.getElementById('symbol').value,
+                orderType: document.getElementById('orderType').value,
+                volume: parseFloat(document.getElementById('volume').value),
+                price: parseFloat(document.getElementById('price').value) || null,
+                stopLoss: parseFloat(document.getElementById('stopLoss').value) || null,
+                takeProfit: parseFloat(document.getElementById('takeProfit').value) || null
+            };
+
+            fetch('/api/signals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(signal),
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                alert('Signal sent successfully!');
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error sending signal. Please try again.');
+            });
+        });
+
+        document.getElementById('orderType').addEventListener('change', function() {
+            const priceField = document.getElementById('price');
+            if (this.value.startsWith('MARKET')) {
+                priceField.style.display = 'none';
+                priceField.removeAttribute('required');
+            } else {
+                priceField.style.display = 'block';
+                priceField.setAttribute('required', 'required');
+            }
+        });
+    </script>
+    
+</body>
+</html>

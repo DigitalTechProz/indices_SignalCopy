@@ -6,7 +6,7 @@ import { promises as fs } from 'fs';
 import portfinder from 'portfinder';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import pool from './db.js';
+import pool from './db.js'; // Make sure the path is correct
 dotenv.config();
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -56,7 +56,7 @@ app.post('/api/logout', (req, res) => {
     res.json({ success: true });
 });
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'dist', 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 app.post('/api/signals', async (req, res) => {
     if (!req.session.authenticated) {
