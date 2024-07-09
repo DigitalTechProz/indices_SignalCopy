@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --watch 'src/**' --ext 'ts,json' --exec 'npm run build && node --experimental-specifier-resolution=node dist/index.js'",
-    "build": "tsc",
+    "build": "tsc && cp -r public/* dist/ && cp index.html dist/",
     "start": "node --experimental-specifier-resolution=node dist/index.js"
+    
   },
   "author": "Google LLC",
   "license": "Apache-2.0",
