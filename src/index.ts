@@ -18,7 +18,7 @@ app.use(session({
   cookie: { secure: false } // Set to true if using HTTPS
 }));
 
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Check authentication status
 app.get('/api/check-auth', (req, res) => {
