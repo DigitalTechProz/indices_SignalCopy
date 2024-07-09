@@ -1,3 +1,6 @@
+const pool = require('./db');
+require('dotenv').config();
+
 // Suggested code may be subject to a license. Learn more: ~LicenseLog:1529426007.
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -6,6 +9,8 @@ const session = require('express-session');
 const path = require('path');
 const { error } = require('console');
 const portfinder = require('portfinder');
+
+
 
 const app = express();
 
@@ -98,6 +103,18 @@ app.get('/api/latest-signal', (req, res) => {
         res.status(404).json({ error: 'No signal found' });
     }
 });
+
+app.get('/', async (req, res) => {
+   try {
+    const result = await pool.query('SELECT NOW()');
+    res.send(`Database connected: ${result.rows[0].now}`);
+
+   }catch (err) {
+    console.error(err);
+    res.send('Internal Server Error: error connecting to database');
+   }
+});
+
 
 portfinder.getPortPromise().then(port => {
     app.listen(port, () => {
