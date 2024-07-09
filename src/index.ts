@@ -72,7 +72,7 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'dist', 'public', 'index.html')); 
+    res.sendFile(path.join(__dirname, 'public', 'index.html')); 
 });
 
 
